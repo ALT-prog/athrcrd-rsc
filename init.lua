@@ -18,7 +18,7 @@ local function SecureInitialize()
 
     _readfile = readfile
     readfile = (function(name)
-        return _readfile("workspace\\"..name)
+        return _readfile("userfile_"..name)
     end)
 
     --// Anti-hook protection
