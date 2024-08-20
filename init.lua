@@ -1,10 +1,5 @@
-version = 110
 writefile = (function()end)
 readfile = (function()end)
-
-if (get_current_version() ~= version) then
-    lua_exit()
-end
 
 local function SecureInitialize()
     local _get_current_version = get_current_version
