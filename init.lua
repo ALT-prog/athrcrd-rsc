@@ -10,16 +10,8 @@ local function SecureInitialize()
     os.rename = __function_disabled
     os.remove = __function_disabled
     package.loadlib = __function_disabled
-
-    _writefile = writefile
-    writefile = (function(name, data)
-        return writefile("userfile_"..name, data)
-    end)
-
-    _readfile = readfile
-    readfile = (function(name)
-        return _readfile("userfile_"..name)
-    end)
+    writefile = __function_disabled
+    readfile = __function_disabled
 
     --// Anti-hook protection
     local _lua_exit = lua_exit
