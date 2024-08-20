@@ -1,4 +1,6 @@
 local function SecureInitialize()
+
+    --// Security
     local function __function_disabled()
         return error("This function is disabled")
     end
@@ -8,6 +10,18 @@ local function SecureInitialize()
     os.rename = __function_disabled
     os.remove = __function_disabled
     package.loadlib = __function_disabled
+
+    _writefile = writefile
+    writefile = (function(name, data)
+        return writefile("userfile_"..name, data)
+    end)
+
+    _readfile = readfile
+    readfile = (function(name)
+        return _readfile("workspace\\"..name)
+    end)
+
+    --// Anti-hook protection
     local _lua_exit = lua_exit
     local _get_current_version = get_current_version
     local _get_bitrate = get_bitrate
