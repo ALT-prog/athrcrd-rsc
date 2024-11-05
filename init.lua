@@ -4,14 +4,30 @@ local function SecureInitialize()
     local function __function_disabled()
         return error("This function is disabled")
     end
+
+    local io_open = io.open
     os.execute = __function_disabled
     io.open = __function_disabled
     os.exit = __function_disabled
     os.rename = __function_disabled
     os.remove = __function_disabled
     package.loadlib = __function_disabled
-    writefile = __function_disabled
-    readfile = __function_disabled
+
+    writefile = (function(name, data)
+        local file = io_open("userfile_"..name, "w+")
+        if (file == nil) then
+            return false
+        end
+        return file:write(data)
+    end)
+
+    readfile = (function(name)
+        local file = io_open("userfile_"..name, "r")
+        if (file == nil) then
+            return false
+        end
+        return file:read()
+    end)
 
     --// Anti-hook protection
     local _lua_exit = lua_exit
