@@ -18,7 +18,8 @@ local function SecureInitialize()
         if (file == nil) then
             return false
         end
-        return file:write(data)
+        file:write(data)
+        return file:close()
     end)
 
     readfile = (function(name)
@@ -26,7 +27,9 @@ local function SecureInitialize()
         if (file == nil) then
             return false
         end
-        return file:read()
+        local data = file:read()
+        file:close()
+        return data
     end)
 
     --// Anti-hook protection
