@@ -41,22 +41,22 @@ local function LocalizedEntry()
         debug.getupvalues = (function(f)
             local Upvalues = {}
             while (true) do
-                local upvalue = debug.getupvalue(f, #Upvalues+1)
+                local name, upvalue = debug.getupvalue(f, #Upvalues+1)
                 if (upvalue == nil) then
                     break
                 end
-                Upvalues[#Upvalues+1] = upvalue
+                Upvalues[#Upvalues+1] = {name,upvalue}
             end
         end)
 
         debug.getlocals = (function(f)
             local Locals = {}
             while (true) do
-                local Local = debug.getlocal(f, #Locals+1)
+                local name, Local = debug.getlocal(f, #Locals+1)
                 if (Local == nil) then
                     break
                 end
-                Locals[#Locals+1] = Local
+                Locals[#Locals+1] = {name, Local}
             end
         end)
     
