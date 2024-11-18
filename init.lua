@@ -69,7 +69,27 @@ local function LocalizedEntry()
         local _get_int16_db = get_int16_db
         local _set_exploit_db = set_exploit_db
         local _set_int16_db = set_int16_db
+        local _lock_bitrate = lock_bitrate
+        local _unlock_bitrate = unlock_bitrate
+        local _secure_call = secure_call
+        local _wait = wait
+        local _createthread = createthread
         --local _pcall = protected_call
+        wait = (function(time)
+            return _wait(time)
+        end)
+        secure_call = (function(proto)
+            return _secure_call(proto)
+        end)
+        unlock_bitrate = (function()
+            return _unlock_bitrate()
+        end)
+        lock_bitrate = (function()
+            return _lock_bitrate()
+        end)
+        lua_exit = (function()
+            return _lua_exit()
+        end)
         get_current_version = (function()
             return _get_current_version()
         end)
@@ -91,88 +111,77 @@ local function LocalizedEntry()
         set_int16_db = (function(db)
             return _set_int16_db(db)
         end)
+        createthread = (function(Function)
+            return _createthread(Function)
+        end)
     end
     SecureInitialize()
     SecureInitialize = nil
-    lua_exit = nil
 
-    local exit_routines = {}
-    local fault_routines = {}
-    local lock_routines = {}
-    local release_routines = {}
-    local ctd_routines = {}
+    local exit_callbacks = {}
+    local fault_callbacks = {}
+    local upvalue_callbacks = {}
 
     --// exit routines
-    add_exit_routine = (function(f)
-        exit_routines[#exit_routines+1] = f
-        return #exit_routines
+    add_exit_callback = (function(f)
+        exit_callbacks[#exit_callbacks+1] = f
+        return #exit_callbacks
     end)
-    remove_exit_routine = (function(i)
-        exit_routines[i] = nil
+    remove_exit_callback = (function(i)
+        exit_callbacks[i] = nil
     end)
 
     --// fault routines
-    add_fault_routine = (function(f)
-        fault_routines[#fault_routines+1] = f
-        return #fault_routines
+    add_fault_callback = (function(f)
+        fault_callbacks[#fault_callbacks+1] = f
+        return #fault_callbacks
     end)
-    remove_fault_routine = (function(i)
-        fault_routines[i] = nil
-    end)
-
-    --// lock routines
-    add_lock_routine = (function(f)
-        lock_routines[#lock_routines+1] = f
-        return #lock_routines
-    end)
-    remove_lock_routine = (function(i)
-        lock_routines[i] = nil
+    remove_fault_callback = (function(i)
+        fault_callbacks[i] = nil
     end)
 
-    --// release routines
-    add_release_routine = (function(f)
-        release_routines[#release_routines+1] = f
-        return #release_routines
+    add_upvalue_callback = (function(f)
+        upvalue_callbacks[#upvalue_callbacks+1] = f
+        return #upvalue_callbacks
     end)
-    remove_release_routine = (function(i)
-        release_routines[i] = nil
-    end)
-
-    --// release routines
-    add_criticalthreaddied_routine = (function(f)
-        ctd_routines[#ctd_routines+1] = f
-        return #ctd_routines
-    end)
-    remove_criticalthreaddied_routine = (function(i)
-        ctd_routines[i] = nil
+    remove_upvalue_callback = (function(i)
+        if (i == 1) then --// locked
+            return
+        end
+        upvalue_callbacks[i] = nil
     end)
 
-    setmetatable(_G, {__metatable = "Locked", __exit_asserted = (function(reason) -- called when aethercord closes through lua calls
-        for i,v in pairs(exit_routines) do
-            v(reason)
+    setmetatable(_G, {__metatable = "Aethercord", __exit = (function() -- called when aethercord closes through lua calls
+        for i,v in pairs(exit_callbacks) do
+            if (v) then
+                v()
+            end
         end
-    end), __fault = (function(thread)
-        --// Called when a script is using aethercords protected call wrapper and the wrapper is somehow folded (bypassed) or if the script errors
-        -- used to protect a script against other scripts analyzing it
-        for i,v in pairs(fault_routines) do
-            v(thread)
+    end), __fault = (function(error_message)
+        --// Called when a script is using aethercords protected call wrapper and the script errors
+        -- used to protect a script against other scripts analyzing it & used for other things
+        for i,v in pairs(fault_callbacks) do
+            if (v) then
+                v(error_message)
+            end
         end
-    end), __lock_asserted = (function(thread_owner)
-        --// Called when a script asserts a script lock which stops all threads except for the callers (useful for multi-thread exchange)
-        for i,v in pairs(lock_routines) do
-            v(thread_owner)
+    end), __upvalue = (function(f,index)
+        local state = true
+        for i,v in pairs(upvalue_callbacks) do
+            if (v) then
+                if (not v(f,index)) then
+                    state = false
+                end
+            end
         end
-    end), __release_asserted = (function(thread_owner)
-        --// Called when a script asserts the release flag which resumes all threads (useful for multi-thread exchange)
-        for i,v in pairs(release_routines) do
-            v(thread_owner)
-        end
-    end), __critical_thread_died = (function(thread, err)
-        --// Called if a thread enables a critical section and it throws an error or faults
-        for i,v in pairs(ctd_routines) do
-            v(thread, err)
-        end
+        return state
+    end), __interrupt = (function()
+        
     end)})
+
+    add_upvalue_callback((function(f,i)
+        return not (f == add_upvalue_callback or f == remove_upvalue_callback or f == lua_exit or f == secure_call or f == wait or f == unlock_bitrate or f == lock_bitrate or f == set_bitrate or f == set_int16_db or f == set_exploit_db or f == get_current_version or f == get_exploit_db or f == get_int16_db or f == get_bitrate or f == createthread)
+    end))
 end
 
 LocalizedEntry()
