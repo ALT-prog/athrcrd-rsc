@@ -1,4 +1,8 @@
-local aethercord = {}
+local audio = {}
+local ui = {}
+local masking = {}
+local user = {}
+local http = {}
 local function LocalizedEntry()
     local function SecureInitialize()
     
@@ -8,35 +12,25 @@ local function LocalizedEntry()
         end
     
         local io_open = io.open
-        os.execute = __function_disabled
-        io.open = __function_disabled
+        io.open = (function(filename, ...)
+            if (filename:find("C:\\") or filename:find("Windows") or filename:find("System32") or filename:find(":\\") or filename:find("..")) then
+                return "Access denied"
+            end
+            return io_open(filename, ...)
+        end)
         io.popen = __function_disabled
+        os.execute = __function_disabled
         os.exit = __function_disabled
         os.rename = __function_disabled
         os.remove = __function_disabled
-        package.loadlib = __function_disabled
-        writefile = (function(name, data)
-            return (function()
-                local file = io_open("userfile_"..name, "w+")
-                if (file == nil) then
-                    return false
-                end
-                file:write(data)
-                return file:close()
-            end)()
+        local package_loadlib = package.loadlib
+        package.loadlib = (function(library, routine)
+            if (library:find("libc") or routine:find("hook") or routine:find("system")) then
+                return
+            end
+            return package_loadlib(library, routine)
         end)
-    
-        readfile = (function(name)
-            return (function()
-                local file = io_open("userfile_"..name, "r")
-                if (file == nil) then
-                    return false
-                end
-                local data = file:read()
-                file:close()
-                return data
-            end)
-        end)
+        --package.loadlib = __function_disabled
 
         debug.getupvalues = (function(f)
             local Upvalues = {}
@@ -62,6 +56,12 @@ local function LocalizedEntry()
     
         --// Anti-hook protection
         local _lua_exit = lua_exit
+        local _sound_distortion = sound_distortion
+        local _set_sd_distortion = set_sd_distortion
+        local _set_sd_multiply = set_sd_multiply
+        local _highpass_filter = highpass_filter
+        local _stereo_filter = stereo_filter
+        local _override_pcm = override_pcm
         local _get_current_version = get_current_version
         local _get_bitrate = get_bitrate
         local _set_bitrate = set_bitrate
@@ -81,35 +81,68 @@ local function LocalizedEntry()
         secure_call = (function(proto)
             return _secure_call(proto)
         end)
-        unlock_bitrate = (function()
+        unlock_bitrate = nil
+        audio.unlock_bitrate = (function()
             return _unlock_bitrate()
         end)
-        lock_bitrate = (function()
+        lock_bitrate = nil
+        audio.lock_bitrate = (function()
             return _lock_bitrate()
         end)
         lua_exit = (function()
             return _lua_exit()
         end)
-        get_current_version = (function()
+        get_current_version = nil
+        user.get_current_version = (function()
             return _get_current_version()
         end)
-        get_bitrate = (function()
+        get_bitrate = nil
+        audio.get_bitrate = (function()
             return _get_bitrate()
         end)
-        set_bitrate = (function(bitrate)
+        set_bitrate = nil
+        audio.set_bitrate = (function(bitrate)
             return _set_bitrate(bitrate)
         end)
-        get_exploit_db = (function()
+        get_exploit_db = nil
+        audio.get_exploit_db = (function()
             return _get_exploit_db()
         end)
-        get_int16_db = (function ()
+        get_int16_db = nil
+        audio.get_int16_db = (function ()
             return _get_int16_db()
         end)
-        set_exploit_db = (function(db)
+        set_exploit_db = nil
+        audio.set_exploit_db = (function(db)
             return _set_exploit_db(db)
         end)
-        set_int16_db = (function(db)
+        set_int16_db = nil
+        audio.set_int16_db = (function(db)
             return _set_int16_db(db)
+        end)
+        override_pcm = nil
+        audio.override_pcm = (function(pcm_table)
+            return _override_pcm(pcm_table)
+        end)
+        sound_distortion = nil
+        audio.sound_distortion = (function(bool)
+            return _sound_distortion(bool)
+        end)
+        set_sd_distortion = nil
+        audio.set_sd_distortion = (function(amount)
+            return _set_sd_distortion(amount)
+        end)
+        set_sd_multiply = nil
+        audio.set_sd_multiply = (function(boolean)
+            return _set_sd_multiply(boolean)
+        end)
+        highpass_filter = nil
+        audio.highpass_filter = (function(boolean)
+            return _highpass_filter(boolean)
+        end)
+        stereo_filter = nil
+        audio.stereo_filter = (function(amount)
+            return _stereo_filter(amount)
         end)
         createthread = (function(Function)
             return _createthread(Function)
@@ -121,6 +154,7 @@ local function LocalizedEntry()
     local exit_callbacks = {}
     local fault_callbacks = {}
     local upvalue_callbacks = {}
+    local opus_callbacks = {}
 
     --// exit routines
     add_exit_callback = (function(f)
@@ -151,6 +185,14 @@ local function LocalizedEntry()
         upvalue_callbacks[i] = nil
     end)
 
+    audio.add_opus_callback = (function(f)
+        opus_callbacks[#opus_callbacks+1] = f
+        return #opus_callbacks
+    end)
+    audio.remove_opus_callback = (function(i)
+        opus_callbacks[i] = nil
+    end)
+
     setmetatable(_G, {__metatable = "Aethercord", __exit = (function() -- called when aethercord closes through lua calls
         for i,v in pairs(exit_callbacks) do
             if (v) then
@@ -175,12 +217,15 @@ local function LocalizedEntry()
             end
         end
         return state
-    end), __interrupt = (function()
-        
+    end), __opus = (function(pcm_table)
+        for i,v in pairs(opus_callbacks) do
+            pcm_table = v(pcm_table)
+        end
+        return pcm_table
     end)})
 
     add_upvalue_callback((function(f,i)
-        return not (f == add_upvalue_callback or f == remove_upvalue_callback or f == lua_exit or f == secure_call or f == wait or f == unlock_bitrate or f == lock_bitrate or f == set_bitrate or f == set_int16_db or f == set_exploit_db or f == get_current_version or f == get_exploit_db or f == get_int16_db or f == get_bitrate or f == createthread)
+        return not (f == audio.highpass_filter or f == audio.set_sd_distortion or f == audio.sound_distortion or f == audio.set_sd_multiply or f == audio.override_pcm or f == audio.stereo_filter or f == audio.add_opus_callback or f == audio.remove_opus_callback or f == add_upvalue_callback or f == remove_upvalue_callback or f == lua_exit or f == secure_call or f == wait or f == unlock_bitrate or f == lock_bitrate or f == set_bitrate or f == set_int16_db or f == set_exploit_db or f == get_current_version or f == get_exploit_db or f == get_int16_db or f == get_bitrate or f == createthread or f == package.loadlib or f == io.open)
     end))
 end
 
