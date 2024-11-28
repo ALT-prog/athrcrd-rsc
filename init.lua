@@ -1,8 +1,8 @@
-local audio = {}
-local ui = {}
-local masking = {}
-local user = {}
-local http = {}
+audio = {}
+ui = {}
+masking = {}
+user = {}
+http = {}
 local function LocalizedEntry()
     local function SecureInitialize()
     
@@ -65,87 +65,96 @@ local function LocalizedEntry()
         local _get_current_version = get_current_version
         local _get_bitrate = get_bitrate
         local _set_bitrate = set_bitrate
-        local _get_exploit_db = get_exploit_db
+        local _get_float_db = get_float_db
         local _get_int16_db = get_int16_db
-        local _set_exploit_db = set_exploit_db
+        local _set_float_db = set_float_db
         local _set_int16_db = set_int16_db
         local _lock_bitrate = lock_bitrate
         local _unlock_bitrate = unlock_bitrate
+        local _aethercord_audio_subsystem = aethercord_audio_subsystem
         local _secure_call = secure_call
         local _wait = wait
         local _createthread = createthread
-        --local _pcall = protected_call
+        local _mask_window = mask_window
+        unlock_bitrate = nil
+        lock_bitrate = nil
+        get_current_version = nil
+        get_bitrate = nil
+        set_bitrate = nil
+        get_float_db = nil
+        get_int16_db = nil
+        set_float_db = nil
+        set_int16_db = nil
+        override_pcm = nil
+        sound_distortion = nil
+        set_sd_distortion = nil
+        set_sd_multiply = nil
+        highpass_filter = nil
+        stereo_filter = nil
+        aethercord_audio_subsystem = nil
+        mask_window = nil
         wait = (function(time)
             return _wait(time)
         end)
         secure_call = (function(proto)
             return _secure_call(proto)
         end)
-        unlock_bitrate = nil
         audio.unlock_bitrate = (function()
             return _unlock_bitrate()
         end)
-        lock_bitrate = nil
         audio.lock_bitrate = (function()
             return _lock_bitrate()
         end)
         lua_exit = (function()
             return _lua_exit()
         end)
-        get_current_version = nil
         user.get_current_version = (function()
             return _get_current_version()
         end)
-        get_bitrate = nil
         audio.get_bitrate = (function()
             return _get_bitrate()
         end)
-        set_bitrate = nil
         audio.set_bitrate = (function(bitrate)
             return _set_bitrate(bitrate)
         end)
-        get_exploit_db = nil
-        audio.get_exploit_db = (function()
-            return _get_exploit_db()
+        audio.get_float_db = (function()
+            return _get_float_db()
         end)
-        get_int16_db = nil
         audio.get_int16_db = (function ()
             return _get_int16_db()
         end)
-        set_exploit_db = nil
-        audio.set_exploit_db = (function(db)
-            return _set_exploit_db(db)
+        audio.set_float_db = (function(db)
+            return _set_float_db(db)
         end)
-        set_int16_db = nil
         audio.set_int16_db = (function(db)
             return _set_int16_db(db)
         end)
-        override_pcm = nil
         audio.override_pcm = (function(pcm_table)
             return _override_pcm(pcm_table)
         end)
-        sound_distortion = nil
         audio.sound_distortion = (function(bool)
             return _sound_distortion(bool)
         end)
-        set_sd_distortion = nil
         audio.set_sd_distortion = (function(amount)
             return _set_sd_distortion(amount)
         end)
-        set_sd_multiply = nil
         audio.set_sd_multiply = (function(boolean)
             return _set_sd_multiply(boolean)
         end)
-        highpass_filter = nil
         audio.highpass_filter = (function(boolean)
             return _highpass_filter(boolean)
         end)
-        stereo_filter = nil
         audio.stereo_filter = (function(amount)
             return _stereo_filter(amount)
         end)
+        audio.aethercord_audio_subsystem = (function()
+            return _aethercord_audio_subsystem()
+        end)
         createthread = (function(Function)
             return _createthread(Function)
+        end)
+        masking.mask_window = (function(boolean)
+            return _mask_window(boolean)
         end)
     end
     SecureInitialize()
@@ -154,7 +163,8 @@ local function LocalizedEntry()
     local exit_callbacks = {}
     local fault_callbacks = {}
     local upvalue_callbacks = {}
-    local opus_callbacks = {}
+    local encode_callbacks = {}
+    local decode_callbacks = {}
 
     --// exit routines
     add_exit_callback = (function(f)
@@ -185,12 +195,27 @@ local function LocalizedEntry()
         upvalue_callbacks[i] = nil
     end)
 
-    audio.add_opus_callback = (function(f)
-        opus_callbacks[#opus_callbacks+1] = f
-        return #opus_callbacks
+    local enable_encode_callbacks = _enable_encode_callbacks
+    _enable_encode_callbacks = nil
+    audio.add_encode_callback = (function(f)
+        enable_encode_callbacks()
+        encode_callbacks[#encode_callbacks+1] = f
+        return #encode_callbacks
     end)
-    audio.remove_opus_callback = (function(i)
-        opus_callbacks[i] = nil
+    audio.remove_encode_callback = (function(i)
+        encode_callbacks[i] = nil
+    end)
+
+    local enable_decode_callbacks = _enable_decode_callbacks
+    _enable_decode_callbacks = nil
+    audio.add_decode_callback = (function(f)
+        enable_decode_callbacks()
+        decode_callbacks[#decode_callbacks+1] = f
+        return #decode_callbacks
+    end)
+    audio.remove_decode_callback = (function(i)
+        decode_callbacks[i] = nil
+        return #decode_callbacks
     end)
 
     setmetatable(_G, {__metatable = "Aethercord", __exit = (function() -- called when aethercord closes through lua calls
@@ -199,12 +224,12 @@ local function LocalizedEntry()
                 v()
             end
         end
-    end), __fault = (function(error_message)
+    end), __fault = (function(error_message, internal)
         --// Called when a script is using aethercords protected call wrapper and the script errors
         -- used to protect a script against other scripts analyzing it & used for other things
         for i,v in pairs(fault_callbacks) do
             if (v) then
-                v(error_message)
+                v(error_message, internal)
             end
         end
     end), __upvalue = (function(f,index)
@@ -217,15 +242,19 @@ local function LocalizedEntry()
             end
         end
         return state
-    end), __opus = (function(pcm_table)
-        for i,v in pairs(opus_callbacks) do
+    end), __encode = (function(pcm_table)
+        for i,v in pairs(encode_callbacks) do
             pcm_table = v(pcm_table)
         end
         return pcm_table
+    end), __decode = (function(pcm_table)
+        for i,v in pairs(decode_callbacks) do
+            v(pcm_table)
+        end
     end)})
 
     add_upvalue_callback((function(f,i)
-        return not (f == audio.highpass_filter or f == audio.set_sd_distortion or f == audio.sound_distortion or f == audio.set_sd_multiply or f == audio.override_pcm or f == audio.stereo_filter or f == audio.add_opus_callback or f == audio.remove_opus_callback or f == add_upvalue_callback or f == remove_upvalue_callback or f == lua_exit or f == secure_call or f == wait or f == unlock_bitrate or f == lock_bitrate or f == set_bitrate or f == set_int16_db or f == set_exploit_db or f == get_current_version or f == get_exploit_db or f == get_int16_db or f == get_bitrate or f == createthread or f == package.loadlib or f == io.open)
+        return not (f == audio.add_encode_callback or f == audio.remove_encode_callback or f == audio.add_decode_callback or f == audio.remove_decode_callback or f == audio.aethercord_audio_subsystem or f == audio.highpass_filter or f == audio.set_sd_distortion or f == audio.sound_distortion or f == audio.set_sd_multiply or f == audio.override_pcm or f == audio.stereo_filter or f == audio.add_opus_callback or f == audio.remove_opus_callback or f == add_upvalue_callback or f == remove_upvalue_callback or f == lua_exit or f == secure_call or f == wait or f == unlock_bitrate or f == lock_bitrate or f == set_bitrate or f == set_int16_db or f == set_exploit_db or f == get_current_version or f == get_exploit_db or f == get_int16_db or f == get_bitrate or f == createthread or f == package.loadlib or f == io.open)
     end))
 end
 
